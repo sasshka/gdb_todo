@@ -1,5 +1,5 @@
 Source-tracking-breakpoints
---------------------
+----------------------------
 
 - better matching strategy - find suitable fuzzy matching algorithm, changing the lines immediately before the breakpoint, if condition might be slightly wrong
 
@@ -16,7 +16,7 @@ Source-tracking-breakpoints
 - try to use source-tracking with kdebug?
 
 Ftrace-next, drgn-why-sleeping
---------------------------------
+-------------------------------
 
 - I need a killer example
 
@@ -34,7 +34,8 @@ x magic gdb packet: qExecAndArgs, from GDB 18, if the remote target does not sup
 
 
 GDB for vmcore?
------------------------
+----------------
+
 - why GDB won't look at DWARF stuff itself
 
 - should we port crash to GDB <-- implement that in GDB?
@@ -54,6 +55,7 @@ GDB for vmcore?
 
 AUXV kernel patch
 ------------------
+
 - repost
 
 
