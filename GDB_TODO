@@ -1,0 +1,56 @@
+Source-tracking-breakpoints
+--------------------
+
+- better matching strategy - find suitable fuzzy matching algorithm, changing the lines immediately before the breakpoint, if condition might be slightly wrong
+
+- set context and searching window by the user
+
+- flag to create a particular breakpoint without tracking
+
+- Breakpoint checking. create bp, symtab + line list, can we track? when we reload, we take the location spec and recreate the bp locations, we create symtab and linelist again, has bfd changes? then we need to read the source code and find a new location and then create a new symtab and line location, what if the location spec does not match any source line, then we won't get any symtab and line, if that happens, the breakpoint will become disabled as the line won't match anything, we want a solution when we're not relying on using the original the orig location spec in order to figure out if the bp needs to be updated. When we originally capture the src context, we should stat() the source file, we know it was last changed, when we recreate the bp, we can stat again and we know if it got changed. We need to store the objfile and bfd. 
+
+- turning on by default blocker - tracking line might get changed as the algorithm gets better, we would need to update the testsuite - do we need to print anything at all? maybe we need a helper function to match from info breakpoints? 
+
+- write a blog post to Red Hat blog if the option makes it as default for GDB 19
+
+- try to use source-tracking with kdebug?
+
+Ftrace-next, drgn-why-sleeping
+--------------------------------
+
+- I need a killer example
+
+- ftrace - use it unprivilleged
+
+target valgrind
+----------------
+
+- magic gdb packet: qExecAndArgs, from GDB 18, if the remote target does not support a particular packet, gdb assumes it's valgrind and runs on the same machine, so I do not need to set sysroot, and from gdb 18, I can ommit set remote exec-file, so we only need to replace target extended-remote | vgdb --multi, I need target sub-command in GDB, would forward itself to target extended-remote
+
+GDB for vmcore?
+-----------------------
+- why GDB won't look at DWARF stuff itself
+
+- should we port crash to GDB <-- implement that in GDB?
+
+- try bt on vmcore as a first thing
+
+- if GDB replaces crash, maintenance costs is going down - long term cost reduce
+
+- take crash and look for good stuff in there that could be upstreamed, look for interesting features?
+
+- what prevents us from fully integrating crash into GDB
+
+- drgn as library can't be full replace for crash?
+
+- calling drgn rom GDB may full replace crash?
+
+
+AUXV kernel patch
+------------------
+- repost
+
+
+
+
+
