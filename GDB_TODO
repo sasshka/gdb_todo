@@ -3,13 +3,152 @@ Source-tracking-breakpoints
 
 - better matching strategy - find suitable fuzzy matching algorithm, changing the lines immediately before the breakpoint, if condition might be slightly wrong
 
+  + I know nothing about this kind of fuzzy-matching, but we ideally
+    want something that can handle lines in the context changing, and
+    new lines being added within the context window.
+
+    I do wonder if there's any scope to expose the internals of the
+    source tracking through the Python API and then allow for
+    proto-typing of source tracking algorithms in Python.
+
 - set context and searching window by the user
+
+  + This might have an influence on, and be influenced by, the better
+    matching strategy.  If the better strategy requires more context
+    then we don't want to allow users to reduce the context below that
+    threshold.
+
+    Similarly, though having knobs to controls these things might be
+    interesting, we should keep in mind if it is actually _useful_ to
+    the end users.  Ideally we'd find a context size that's "good
+    enough" and just stick with it.  The ideal solution (IMHO) is not
+    having a user setting -- though this doesn't prevent us having a
+    maintenance setting.
 
 - flag to create a particular breakpoint without tracking
 
-- Breakpoint checking. create bp, symtab + line list, can we track? when we reload, we take the location spec and recreate the bp locations, we create symtab and linelist again, has bfd changes? then we need to read the source code and find a new location and then create a new symtab and line location, what if the location spec does not match any source line, then we won't get any symtab and line, if that happens, the breakpoint will become disabled as the line won't match anything, we want a solution when we're not relying on using the original the orig location spec in order to figure out if the bp needs to be updated. When we originally capture the src context, we should stat() the source file, we know it was last changed, when we recreate the bp, we can stat again and we know if it got changed. We need to store the objfile and bfd. 
+  + I'm thinking something like "break -source-tracking on|off ...."
+    though we need to think about what to do if a user specifically
+    asks for source tracking and then tries to create a breakpoint
+    that cannot be source tracked, e.g. "break -source-tracking on
+    function_name" should this give an error?  Just ignore the flag?
 
-- turning on by default blocker - tracking line might get changed as the algorithm gets better, we would need to update the testsuite - do we need to print anything at all? maybe we need a helper function to match from info breakpoints? 
+- Breakpoint checking. create bp, symtab + line list, can we track? when we reload, we take the location spec and recreate the bp locations, we create symtab and linelist again, has bfd changes? then we need to read the source code and find a new location and then create a new symtab and line location, what if the location spec does not match any source line, then we won't get any symtab and line, if that happens, the breakpoint will become disabled as the line won't match anything, we want a solution when we're not relying on using the original the orig location spec in order to figure out if the bp needs to be updated. When we originally capture the src context, we should stat() the source file, we know it was last changed, when we recreate the bp, we can stat again and we know if it got changed. We need to store the objfile and bfd.
+
+  + Consider an input file:
+
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    static int
+    some_function (void)
+    {
+      return 0;		/* Line 4.  */
+    }
+
+    int
+    main (void)
+    {
+      return some_function ();
+    }
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    In this example, place a source tracking breakpoint on line 4.
+    Now edit the file to look like this:
+
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    /* Comment.
+       Comment.
+       Comment.  */
+    static int
+    some_function (void)
+    {
+      return 0;		/* Line 4.  */
+    }
+
+    int
+    main (void)
+    {
+      return some_function ();
+    }
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    When you restart GDB the source-tracking breakpoint will fail to
+    update, and you'll get an error like:
+
+    Error in re-setting breakpoint 1: No compiled code for line 4 in file "source-tracking.c".
+
+    This is because, in order to update a source tracking breakpoint
+    GDB first creates the symtab_and_line objects for the old
+    location, and from that tries to figure out if the location needs
+    to move.  In the above case there is no compiled code for the old
+    location after the change.  If instead you change the source file
+    to:
+
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    static int
+    some_function (void)
+    {
+      /* Comment.
+         Comment.
+         Comment.  */
+      return 0;		/* Line 4.  */
+    }
+
+    int
+    main (void)
+    {
+      return some_function ();
+    }
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+    Now the breakpoint will update correctly as an attempt to break on
+    line 4 is still inside the function.
+
+    Fixing this will require some restructuring within GDB.  Currently
+    the source cache is symtab based, e.g. symtab in, source code out,
+    but we need it to be filename based, filename in, source code out.
+
+    With that done, the bp_source object needs to track more state,
+    including the actual source filename, along with (I think) all the
+    BFD objects in which breakpoints have been placed.
+
+    We can then ask "has the source file changed?"  If not then
+    nothing to do.  If the source file has changed then "has the BFD
+    also changed?"  If it has then we might need to update the
+    breakpoint location.  Grab the source code from the new cache
+    using just the filename and pass it to the location tracking code.
+
+    Get back a new breakpoint line number and update the breakpoint
+    location spec (as we currently do).
+
+    Only now should we try to create the breakpoint symtab_and_line
+    objects from the breakpoint spec.
+
+- turning on by default blocker - tracking line might get changed as the algorithm gets better, we would need to update the testsuite - do we need to print anything at all? maybe we need a helper function to match from info breakpoints?
+
+  + The current text is "source-tracking enabled (tracking 3 lines
+    around line 8)" or similar.  My take is that everything in the
+    parenthesis is actually an implementation detail that the user
+    shouldn't need to worry about.  If this feature "just works" then
+    the user shouldn't need to worry about this detail.
+
+    The "around line 8" part is already duplication of the breakpoint
+    location, i.e. the line above this says: "... in <function> at
+    <file>:8" so that's one part we could definitely drop.
+
+    And I don't see why the user should care about the context size.
+    If this feature requires the user to micro-manage the context size
+    then this feature isn't working as well as I'd like.  The user
+    just wants this to work.
+
+    I do think that we should indicate when a breakpoint is source
+    tracked though, so I'd just reduce this to "source-tracking
+    enabled".
+
+- In the "better matching algorithm" task about I mention the Python
+  API.  I think there's a general task to expose at least some of this
+  work via the Python API.  For example, just having a predicate
+  available for "is this breakpoint source tracked" would be neat, API
+  users can then display that to the user.
 
 - write a blog post to Red Hat blog if the option makes it as default for GDB 19
 
