@@ -20,12 +20,18 @@ Ftrace-next, drgn-why-sleeping
 
 - I need a killer example
 
-- ftrace - use it unprivilleged
+- ftrace - use it unprivileged
 
-target valgrind
+target valgrind <-- submitted as a python patch to Valgrind: https://bugs.kde.org/show_bug.cgi?id=527435
 ----------------
 
-- magic gdb packet: qExecAndArgs, from GDB 18, if the remote target does not support a particular packet, gdb assumes it's valgrind and runs on the same machine, so I do not need to set sysroot, and from gdb 18, I can ommit set remote exec-file, so we only need to replace target extended-remote | vgdb --multi, I need target sub-command in GDB, would forward itself to target extended-remote
+x magic gdb packet: qExecAndArgs, from GDB 18, if the remote target does not support a particular packet, gdb assumes it's valgrind and runs on the same machine, so I do not need to set sysroot, and from gdb 18, I can omit set remote exec-file, so we only need to replace target extended-remote | vgdb --multi, I need target sub-command in GDB, would forward itself to target extended-remote
+
+- provide a startup dir in GDB for custom GDB commands shipped by different packages:
+ - install target valgrind script in there
+ - drgn-why-sleeping might be using it
+ - ftrace?
+
 
 GDB for vmcore?
 -----------------------
@@ -43,7 +49,7 @@ GDB for vmcore?
 
 - drgn as library can't be full replace for crash?
 
-- calling drgn rom GDB may full replace crash?
+- calling drgn from GDB may full replace crash?
 
 
 AUXV kernel patch
